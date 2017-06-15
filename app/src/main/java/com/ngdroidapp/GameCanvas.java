@@ -4,6 +4,8 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 
+import java.util.Vector;
+
 import istanbul.gamelab.ngdroid.base.BaseCanvas;
 import istanbul.gamelab.ngdroid.util.Log;
 import istanbul.gamelab.ngdroid.util.Utils;
@@ -17,10 +19,20 @@ import istanbul.gamelab.ngdroid.util.Utils;
 
 public class GameCanvas extends BaseCanvas {
 
-    private Bitmap tileset, spritesheet;
-    private int kareno;
-    private int spritex, spritey ,hiz;
-    private Rect tilesrc, tiledst, spritesrc, spritedst;
+    /*Global Değişkenler*/
+    private Bitmap tileset, spritesheet, bullet;
+    private int kareno, animasyonno, animasyonyonu;
+    private int spritex, spritey , hiz, hizx, hizy, bulletoffsetx_temp, bulletoffsety_temp, bulletspeed; // Shift+F6 - Refactor Kısatuşu
+    private int bulletx_temp, bullety_temp;
+
+    public Vector <Rect> bulletdst2;
+    public Vector <Integer> bulletx2, bullety2, bulletoffsetx2, bulletoffsety2, bulletspeedx2, bulletspeedy2;
+
+    private Rect tilesrc, tiledst, spritesrc, spritedst, bulletsrc;
+
+    /*İnteraktif Değişkenler*/
+    int touchx, touchy; // Ekrana nereye bastığımızın koordinatlarını tutar
+
 
     public GameCanvas(NgApp ngApp) {
         super(ngApp);
@@ -35,22 +47,110 @@ public class GameCanvas extends BaseCanvas {
         spritesrc = new Rect();
         spritedst = new Rect();
 
+        bullet = Utils.loadImage(root,"images/bullet.png");
+        bulletsrc = new Rect();
+
+        bulletdst2 = new Vector<>();
+        bulletx2 = new Vector<>();
+        bullety2 = new Vector<>();
+        bulletspeedx2 = new Vector<>();
+        bulletspeedy2 = new Vector<>();
+        bulletoffsetx2 = new Vector<>();
+        bulletoffsety2 = new Vector<>();
+
         kareno = 0;
+        animasyonno = 1;
+        animasyonyonu = 0;
 
         spritex = 0;
         spritey = 0;
+
+        bulletx_temp =0;
+        bullety_temp =0;
+
+        bulletspeed=0;
+
+        bulletoffsetx_temp =256;
+        bulletoffsety_temp =128;
+
         hiz = 16;
+        hizx = 0;
+        hizy = 0;
+
+
     }
 
     public void update() {
 
+        tilesrc.set(0,0,64,64);
+
+        spritex += hizx;
+        spritey += hizy;
+
+        /*bulletx += bulletspeedx;
+        bullety += bulletspeedy;*/
+
+        for (int i=0; i<bulletx2.size(); i++){
+            bulletx2.set(i,bulletx2.elementAt(i) + bulletspeedx2.elementAt(i));
+            bullety2.set(i,bullety2.elementAt(i) + bulletspeedy2.elementAt(i));
+
+            if(bulletx2.elementAt(i)>getWidth() || bulletx2.elementAt(i)<0 || bullety2.elementAt(i)>getHeight() || bullety2.elementAt(i)<0){
+                bulletx2.removeElementAt(i);
+                bullety2.removeElementAt(i);
+                /*bulletoffsetx2.removeElementAt(i);
+                bulletoffsety2.removeElementAt(i);*/
+                bulletdst2.removeElementAt(i);
+                bulletspeedx2.removeElementAt(i);
+                bulletspeedy2.removeElementAt(i);
+            }
+        }
+
+        if(spritex+256 > getWidth() || spritex<0){
+            hizx = 0;
+        }
+        if(spritey+256 > getHeight() || spritey<0){
+            hizy=0;
+        }
+
+
+        if(animasyonno==1){
+            kareno++; //Kareyi arttırmak için
+        }
+        else if(animasyonno==0){
+            kareno = 0;
+        }
+
+
+        if(kareno>8){
+            kareno=1;
+        }
+
+        if(hizx>0){
+            animasyonyonu=0;
+        }
+        else if(hizy>0){
+            animasyonyonu=9;
+        }
+
+        if(Math.abs(hizx)>0||Math.abs(hizy)>0){
+            animasyonno=1;
+        }
+        else{
+            animasyonno=0;
+        }
+
+        spritesrc.set(kareno*128, animasyonyonu*128, (kareno+1)*128, (animasyonyonu+1)*128); //Resimden aldığımız koordinatlar
+        spritedst.set(spritex, spritey, spritex+256, spritey+256); //Ekrana çizeleceği koordinatlar
+
+        bulletsrc.set(0,0,70,70);
+        for (int i=0; i < bulletx2.size(); i++){
+            bulletdst2.elementAt(i).set(bulletx2.elementAt(i), bullety2.elementAt(i), bulletx2.elementAt(i)+32, bullety2.elementAt(i)+32);
+        }
 
 
     }
 
     public void draw(Canvas canvas) {
-
-        tilesrc.set(0,0,64,64);
 
         for (int i=0;i<getWidth();i+=128){
             for(int j=0;j<getHeight();j+=128){
@@ -58,21 +158,13 @@ public class GameCanvas extends BaseCanvas {
                 canvas.drawBitmap(tileset,tilesrc,tiledst,null);
             }
         }
-        spritex+=hiz;
 
-        if(spritex+256 > getWidth()){
-            spritex = getWidth()-256;
-        }
-
-        kareno++; //Kareyi arttırmak için
-
-        if(kareno>8){
-            kareno=1;
-        }
-
-        spritesrc.set(kareno*128, 0, (kareno+1)*128, 128); //Resimden aldığımız koordinatlar
-        spritedst.set(spritex, spritey, spritex+256, spritey+256); //Ekrana çizeleceği koordinatlar
         canvas.drawBitmap(spritesheet, spritesrc, spritedst, null);
+
+        for(int i=0; i<bulletdst2.size(); i++){
+            canvas.drawBitmap(bullet, bulletsrc, bulletdst2.elementAt(i), null); //(Bitmap, Kaynak, Çizdirilmek istenen yer)
+        }
+
 
 
     }
@@ -102,12 +194,74 @@ public class GameCanvas extends BaseCanvas {
     }
 
     public void touchDown(int x, int y) {
+        touchx=x;
+        touchy=y;
     }
 
     public void touchMove(int x, int y) {
     }
 
     public void touchUp(int x, int y) {
+        if(x-touchx>100){
+            animasyonno=1;
+            animasyonyonu=0;
+            hizx=hiz;
+            hizy=0;
+        }
+        else if(touchx-x>100){
+            animasyonno=1;
+            animasyonyonu=1;
+            hizx=-hiz;
+            hizy=0;
+        }
+        else if(y-touchy>100){
+            animasyonno=1;
+            animasyonyonu=9;
+            hizy=hiz;
+            hizx=0;
+        }
+        else if(touchy-y>100){
+            animasyonno=1;
+            animasyonyonu=5;
+            hizy=-hiz;
+            hizx=0;
+        }
+        else{
+            animasyonno=0;
+            hizx=0;
+            hizy=0;
+            bulletspeed=32;
+
+            if(animasyonyonu==0){
+                bulletspeedx2.add(bulletspeed);
+                bulletspeedy2.add(0);
+                bulletoffsetx_temp =256;
+                bulletoffsety_temp =128;
+            }
+            else if(animasyonyonu==1){
+                bulletspeedx2.add(-bulletspeed);
+                bulletspeedy2.add(0);
+                bulletoffsetx_temp =0;
+                bulletoffsety_temp =128;
+            }
+            else if (animasyonyonu==9){
+                bulletspeedy2.add(bulletspeed);
+                bulletspeedx2.add(0);
+                bulletoffsetx_temp =128;
+                bulletoffsety_temp =256;
+            }
+            else if(animasyonyonu==5){
+                bulletspeedy2.add(-bulletspeed);
+                bulletspeedx2.add(0);
+                bulletoffsetx_temp =128;
+                bulletoffsety_temp =0;
+            }
+            bulletx2.add(spritex+ bulletoffsetx_temp);
+            bullety2.add(spritey+ bulletoffsety_temp);
+            bulletx_temp =spritex+ bulletoffsetx_temp;
+            bullety_temp =spritey+ bulletoffsety_temp;
+            bulletdst2.add(new Rect(bulletx_temp, bullety_temp, bulletx_temp +32, bullety_temp +32));
+        }
     }
 
 
